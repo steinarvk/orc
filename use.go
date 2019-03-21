@@ -8,7 +8,17 @@ import (
 )
 
 type RunContext struct {
-	orderedModules []*moduleContext
+	modulesBeganUse []*moduleContext
+	orderedModules  []*moduleContext
+	graph           Graph
+}
+
+func (r *RunContext) registerEdge(dependent, dependency Module) {
+	logrus.Infof("[%p] Dependency: %s --> %s", r, Describe(dependent), Describe(dependency))
+	r.graph.Edges = append(r.graph.Edges, Edge{
+		Dependent:  dependent,
+		Dependency: dependency,
+	})
 }
 
 type UseContext struct {
@@ -17,9 +27,11 @@ type UseContext struct {
 	runCtx       *RunContext
 	modCtx       *moduleContext
 	originalOpts []Option
+	alreadyUsed  map[Module]bool
 }
 
-func (u *UseContext) Use(mod Module, newOptions ...Option) {
+func (u UseContext) Use(mod Module, newOptions ...Option) {
+	u.runCtx.registerEdge(u.modCtx.module, mod)
 	u.modCtx.use(u.runCtx, mod, append(u.originalOpts, newOptions...)...)
 }
 
@@ -72,6 +84,9 @@ func (m *moduleContext) OnStop(f func() error) {
 }
 
 func (m *moduleContext) runUseHooks(ctx UseContext) {
+	if ctx.alreadyUsed[m.module] {
+		return
+	}
 	for _, f := range m.usehooks {
 		f(ctx)
 	}
@@ -104,7 +119,7 @@ func (r *Registry) getContext(module Module, options ...Option) (*moduleContext,
 	return ctx, ok
 }
 
-func (r *Registry) use(runCtx *RunContext, module Module, options ...Option) {
+func (r *Registry) use(runCtx *RunContext, parent Module, module Module, options ...Option) {
 	// Is the module registered? If not register it, otherwise get its context.
 	modCtx, wasOld := r.getContext(module)
 	if !wasOld {
@@ -120,7 +135,14 @@ func (r *Registry) use(runCtx *RunContext, module Module, options ...Option) {
 		runCtx:       runCtx,
 		modCtx:       modCtx,
 		originalOpts: options,
+		alreadyUsed:  map[Module]bool{},
 	}
+	for _, mod := range runCtx.modulesBeganUse {
+		useCtx.alreadyUsed[mod.module] = true
+	}
+	// Prevent use hooks from running twice when used in the same RunContext.
+	runCtx.modulesBeganUse = append(runCtx.modulesBeganUse, modCtx)
+
 	parsed.intoUseContext(&useCtx)
 	modCtx.runUseHooks(useCtx)
 
@@ -129,13 +151,14 @@ func (r *Registry) use(runCtx *RunContext, module Module, options ...Option) {
 
 func (m *moduleContext) use(runCtx *RunContext, mod Module, options ...Option) {
 	// TODO check cycles. may be recursive, but not cyclic.
-	globalRegistry.use(runCtx, mod, options...)
+	globalRegistry.use(runCtx, m.module, mod, options...)
 }
 
 func Use(module Module, options ...Option) *RunContext {
 	// TODO check this is a top-level call (never recursive)
 	runCtx := &RunContext{}
-	globalRegistry.use(runCtx, module, options...)
+	logrus.Infof("[%p] Top-level use: %s", runCtx, Describe(module))
+	globalRegistry.use(runCtx, nil, module, options...)
 	return runCtx
 }
 

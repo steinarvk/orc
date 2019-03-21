@@ -1,23 +1,11 @@
 package orc
 
-import "github.com/sirupsen/logrus"
+import (
+	"github.com/sirupsen/logrus"
+)
 
 type Module interface {
 	OnRegister(ModuleHooks)
-}
-
-type ModuleBundle struct {
-	Modules []Module
-}
-
-func Modules(ms ...Module) *ModuleBundle {
-	return &ModuleBundle{ms}
-}
-
-func (m *ModuleBundle) OnRegister(h ModuleHooks) {
-	for _, m := range m.Modules {
-		m.OnRegister(h)
-	}
 }
 
 type Runnable interface {
