@@ -8,10 +8,10 @@ type flagsModule struct {
 	setFlags func(*pflag.FlagSet)
 }
 
-func (f flagsModule) ModuleName() string { return "Flags" }
+func (f *flagsModule) ModuleName() string { return "Flags" }
 
 func FlagsModule(setFlags func(*pflag.FlagSet)) Module {
-	return flagsModule{setFlags}
+	return &flagsModule{setFlags}
 }
 
 func (f flagsModule) OnRegister(hooks ModuleHooks) {

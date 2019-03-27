@@ -40,6 +40,12 @@ func castBodyFunction(body interface{}) (func([]string) error, error) {
 	}
 }
 
+func ReuseCommand(parent *cobra.Command, existing *cobra.Command) *cobra.Command {
+	cmd := *existing
+	parent.AddCommand(&cmd)
+	return &cmd
+}
+
 func Command(parent *cobra.Command, prereq Module, skeleton cobra.Command, body interface{}, options ...Option) *cobra.Command {
 	cmd := skeleton
 
